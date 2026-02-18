@@ -1,58 +1,65 @@
-import com.aallam.openai.client.OpenAI
-import com.aallam.openai.api.embedding.EmbeddingRequest
-import com.aallam.openai.api.model.ModelId
 import kotlinx.coroutines.runBlocking
-import kotlin.math.sqrt
+import parser.CodeChunk
+import parser.KotlinParser
+import rag.RagEngine
 import java.io.File
 
-data class EmbeddedChunk(val text: String, val embedding: List<Double>)
-
-class RagEngine(apiKey: String) {
-    private val openAI = OpenAI(apiKey)
-    private val store = mutableListOf<EmbeddedChunk>()
-
-    private fun cosine(a: List<Double>, b: List<Double>): Double {
-        val dot = a.zip(b).sumOf { it.first * it.second }
-        val normA = sqrt(a.sumOf { it * it })
-        val normB = sqrt(b.sumOf { it * it })
-        return dot / (normA * normB)
-    }
-
-    suspend fun indexChunks(chunks: List<String>) {
-        for (chunk in chunks) {
-            val embedding = openAI.embeddings(
-                EmbeddingRequest(ModelId("text-embedding-3-small"), listOf(chunk))
-            ).embeddings.first().embedding  // use .embeddings instead of .data
-            store.add(EmbeddedChunk(chunk, embedding))
-        }
-    }
-
-
-    suspend fun retrieve(query: String): String? {
-        val queryEmbedding = openAI.embeddings(
-            EmbeddingRequest(ModelId("text-embedding-3-small"), listOf(query))
-        ).embeddings.first().embedding
-
-        return store.maxByOrNull { cosine(it.embedding, queryEmbedding) }?.text
-    }
-
-
-}
+private const val CODE_SAMPLE_PATH = "src/main/kotlin/sample/TestFile.kt"
+private const val API_KEY_ENV = "OPENAI_API_KEY"
 
 fun main() = runBlocking {
-    val apiKey = "YOUR_API_KEY"
-    val file = File("C:/Users/Aya Ali/IdeaProjects/kotlin_code_rag_test_app/src/main/kotlin/sample/TestFile.kt")
+    Application.run()
+}
 
-    val chunks = file.readText()
-        .split(Regex("(?=\\bfun\\b|\\bclass\\b)"))
-        .filter { it.isNotBlank() }
+object Application {
+    suspend fun run() {
+        val kotlinFile = locateSampleFile()
+        val codeChunks = KotlinParser.parseFile(kotlinFile)
 
-    val rag = RagEngine(apiKey)
-    rag.indexChunks(chunks)
+        if (codeChunks.isEmpty()) {
+            println("No Kotlin declarations were parsed from ${kotlinFile.name}.")
+            return
+        }
 
-    println("Ask a question about the Kotlin file:")
-    val question = readLine()!!
-    val result = rag.retrieve(question)
-    println("\nRetrieved chunk:\n$result")
+        val ragEngine = RagEngine(fetchApiKey())
+        ragEngine.indexChunks(codeChunks)
 
+        val question = promptForQuestion() ?: return
+        val retrievedChunk = ragEngine.retrieve(question)
+
+        displayResult(retrievedChunk, question)
+    }
+
+    private fun locateSampleFile(): File {
+        val file = File(CODE_SAMPLE_PATH)
+        require(file.exists()) {
+            "Sample Kotlin file not found at ${file.absolutePath}. Please ensure the repository is cloned."
+        }
+        return file
+    }
+
+    private fun fetchApiKey(): String =
+        System.getenv(API_KEY_ENV).takeUnless(String::isNullOrBlank) ?: "YOUR_API_KEY"
+
+    private fun promptForQuestion(): String? {
+        println("Ask a question about the Kotlin file:")
+        val input = readLine()?.trim()
+        if (input.isNullOrBlank()) {
+            println("No question provided. Exiting.")
+            return null
+        }
+        return input
+    }
+
+    private fun displayResult(chunk: CodeChunk?, question: String) {
+        if (chunk == null) {
+            println("Unable to find a relevant declaration for \"$question\".")
+            return
+        }
+
+        println("\nRetrieved declaration:")
+        println("Type: ${chunk.type.name.lowercase()}")
+        println("Name: ${chunk.name}")
+        println("Content:\n${chunk.content.trim()}")
+    }
 }

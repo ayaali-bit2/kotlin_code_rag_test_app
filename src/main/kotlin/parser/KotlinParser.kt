@@ -1,21 +1,26 @@
 package parser
 
-import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
-import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
+import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
+import org.jetbrains.kotlin.com.intellij.psi.PsiFileFactory
+import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedFunction
-import org.jetbrains.kotlin.psi.KtClass
 import java.io.File
-import org.jetbrains.kotlin.com.intellij.psi.PsiFileFactory
-import org.jetbrains.kotlin.idea.KotlinLanguage
 
+enum class DeclarationType {
+    CLASS,
+    FUNCTION
+}
 
 data class CodeChunk(
-    val type: String,
+    val type: DeclarationType,
     val name: String,
     val content: String
 )
@@ -23,54 +28,56 @@ data class CodeChunk(
 object KotlinParser {
 
     fun parseFile(file: File): List<CodeChunk> {
+        val disposable = Disposer.newDisposable()
+        val environment = createEnvironment(disposable)
 
-        val disposable: Disposable = Disposer.newDisposable()
-        val configuration = CompilerConfiguration()
-        configuration.put(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY, org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE)
+        return try {
+            val psiFile = createPsiFile(environment, file)
+            extractChunks(psiFile)
+        } finally {
+            Disposer.dispose(disposable)
+        }
+    }
 
-        val environment = KotlinCoreEnvironment.createForProduction(
+    private fun createEnvironment(disposable: Disposable): KotlinCoreEnvironment {
+        val configuration = CompilerConfiguration().apply {
+            put(
+                CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY,
+                org.jetbrains.kotlin.cli.common.messages.MessageCollector.NONE
+            )
+        }
+
+        return KotlinCoreEnvironment.createForProduction(
             disposable,
             configuration,
             EnvironmentConfigFiles.JVM_CONFIG_FILES
         )
+    }
 
-        val psiFile = PsiFileFactory.getInstance(environment.project)
+    private fun createPsiFile(environment: KotlinCoreEnvironment, file: File): KtFile =
+        PsiFileFactory.getInstance(environment.project)
             .createFileFromText(
                 file.name,
                 KotlinLanguage.INSTANCE,
                 file.readText()
             ) as KtFile
 
+    private fun extractChunks(psiFile: KtFile): List<CodeChunk> =
+        psiFile.declarations.mapNotNull { mapDeclaration(it) }
 
-        val chunks = mutableListOf<CodeChunk>()
+    private fun mapDeclaration(declaration: KtDeclaration): CodeChunk? = when (declaration) {
+        is KtClass -> CodeChunk(
+            type = DeclarationType.CLASS,
+            name = declaration.name ?: "UnnamedClass",
+            content = declaration.text
+        )
 
-        psiFile.declarations.forEach { declaration ->
+        is KtNamedFunction -> CodeChunk(
+            type = DeclarationType.FUNCTION,
+            name = declaration.name ?: "UnnamedFunction",
+            content = declaration.text
+        )
 
-            when (declaration) {
-
-                is KtClass -> {
-                    chunks.add(
-                        CodeChunk(
-                            type = "class",
-                            name = declaration.name ?: "UnnamedClass",
-                            content = declaration.text
-                        )
-                    )
-                }
-
-                is KtNamedFunction -> {
-                    chunks.add(
-                        CodeChunk(
-                            type = "function",
-                            name = declaration.name ?: "UnnamedFunction",
-                            content = declaration.text
-                        )
-                    )
-                }
-            }
-        }
-
-        Disposer.dispose(disposable)
-        return chunks
+        else -> null
     }
 }

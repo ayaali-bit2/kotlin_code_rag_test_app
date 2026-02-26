@@ -15,6 +15,9 @@ dependencies {
     implementation("com.aallam.openai:openai-client:3.8.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation(kotlin("stdlib"))
+
+    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit5"))
 }
 
 application {

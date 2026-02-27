@@ -2,6 +2,7 @@ import kotlinx.coroutines.runBlocking
 import parser.CodeChunk
 import parser.KotlinParser
 import rag.RagEngine
+import ui.ListScreen
 import java.io.File
 
 private const val CODE_SAMPLE_PATH = "src/main/kotlin/sample/TestFile.kt"
@@ -20,6 +21,8 @@ object Application {
             println("No Kotlin declarations were parsed from ${kotlinFile.name}.")
             return
         }
+
+        ListScreen.show(codeChunks)
 
         val ragEngine = RagEngine(fetchApiKey())
         ragEngine.indexChunks(codeChunks)

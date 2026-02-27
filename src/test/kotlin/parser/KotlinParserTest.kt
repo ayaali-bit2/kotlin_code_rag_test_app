@@ -37,6 +37,33 @@ class KotlinParserTest {
     }
 
     @Test
+    fun `parseFile recognizes interfaces enums and data classes`() {
+        val file = createTempKotlinFile(
+            """
+            interface SampleInterface {
+                fun execute(): String
+            }
+
+            enum class SampleStatus {
+                PENDING,
+                COMPLETED
+            }
+
+            data class SampleData(
+                val id: Int,
+                val label: String
+            )
+            """.trimIndent()
+        )
+
+        val chunks = KotlinParser.parseFile(file)
+
+        assertTrue(chunks.any { it.type == DeclarationType.INTERFACE && it.name == "SampleInterface" })
+        assertTrue(chunks.any { it.type == DeclarationType.ENUM && it.name == "SampleStatus" })
+        assertTrue(chunks.any { it.type == DeclarationType.DATA_CLASS && it.name == "SampleData" })
+    }
+
+    @Test
     fun `parseFile returns empty list for empty file`() {
         val emptyFile = createTempKotlinFile("")
 

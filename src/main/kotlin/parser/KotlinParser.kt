@@ -16,6 +16,9 @@ import java.io.File
 
 enum class DeclarationType {
     CLASS,
+    INTERFACE,
+    ENUM,
+    DATA_CLASS,
     FUNCTION
 }
 
@@ -67,7 +70,7 @@ object KotlinParser {
 
     private fun mapDeclaration(declaration: KtDeclaration): CodeChunk? = when (declaration) {
         is KtClass -> CodeChunk(
-            type = DeclarationType.CLASS,
+            type = declaration.getClassType(),
             name = declaration.name ?: "UnnamedClass",
             content = declaration.text
         )
@@ -79,5 +82,12 @@ object KotlinParser {
         )
 
         else -> null
+    }
+
+    private fun KtClass.getClassType(): DeclarationType = when {
+        isInterface() -> DeclarationType.INTERFACE
+        isEnum() -> DeclarationType.ENUM
+        isData() -> DeclarationType.DATA_CLASS
+        else -> DeclarationType.CLASS
     }
 }

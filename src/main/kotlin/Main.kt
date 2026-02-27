@@ -1,7 +1,8 @@
 import kotlinx.coroutines.runBlocking
-import parser.CodeChunk
 import parser.KotlinParser
 import rag.RagEngine
+import presentation.DeclarationPresenter
+import ui.ConsoleView
 import java.io.File
 
 private const val CODE_SAMPLE_PATH = "src/main/kotlin/sample/TestFile.kt"
@@ -17,17 +18,18 @@ object Application {
         val codeChunks = KotlinParser.parseFile(kotlinFile)
 
         if (codeChunks.isEmpty()) {
-            println("No Kotlin declarations were parsed from ${kotlinFile.name}.")
+            ConsoleView.showNoDeclarationsFound(kotlinFile.name)
             return
         }
 
-        val ragEngine = RagEngine(fetchApiKey())
-        ragEngine.indexChunks(codeChunks)
+        val presenter = DeclarationPresenter(RagEngine(fetchApiKey()))
+        presenter.indexChunks(codeChunks)
 
-        val question = promptForQuestion() ?: return
-        val retrievedChunk = ragEngine.retrieve(question)
+        ConsoleView.showDeclarationGroups(presenter.groupDeclarationsByType(codeChunks))
+        val question = ConsoleView.promptForQuestion() ?: return
+        val retrievedChunk = presenter.retrieveRelevantChunk(question)
 
-        displayResult(retrievedChunk, question)
+        ConsoleView.showRetrievalResult(retrievedChunk, question)
     }
 
     private fun locateSampleFile(): File {
@@ -40,26 +42,4 @@ object Application {
 
     private fun fetchApiKey(): String =
         System.getenv(API_KEY_ENV).takeUnless(String::isNullOrBlank) ?: "YOUR_API_KEY"
-
-    private fun promptForQuestion(): String? {
-        println("Ask a question about the Kotlin file:")
-        val input = readLine()?.trim()
-        if (input.isNullOrBlank()) {
-            println("No question provided. Exiting.")
-            return null
-        }
-        return input
-    }
-
-    private fun displayResult(chunk: CodeChunk?, question: String) {
-        if (chunk == null) {
-            println("Unable to find a relevant declaration for \"$question\".")
-            return
-        }
-
-        println("\nRetrieved declaration:")
-        println("Type: ${chunk.type.name.lowercase()}")
-        println("Name: ${chunk.name}")
-        println("Content:\n${chunk.content.trim()}")
-    }
 }

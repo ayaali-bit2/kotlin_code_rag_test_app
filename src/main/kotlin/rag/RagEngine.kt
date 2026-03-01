@@ -55,6 +55,6 @@ class RagEngine(private val embeddingProvider: EmbeddingProvider) {
     }
 
     fun clearStore() {
-        store.clear()
+        store.clear(
     }
 }

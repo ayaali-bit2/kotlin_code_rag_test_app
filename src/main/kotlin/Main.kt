@@ -9,7 +9,7 @@ private const val API_KEY_ENV = "OPENAI_API_KEY"
 
 fun main() = runBlocking {
     Application.run()
-}
+
 
 object Application {
     suspend fun run() {
@@ -49,7 +49,7 @@ object Application {
             return null
         }
         return input
-    }
+
 
     private fun displayResult(chunk: CodeChunk?, question: String) {
         if (chunk == null) {

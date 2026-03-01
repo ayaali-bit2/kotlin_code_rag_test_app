@@ -16,7 +16,7 @@ import java.io.File
 
 enum class DeclarationType {
     CLASS,
-    FUNCTION
+    FUNTION
 }
 
 data class CodeChunk(
